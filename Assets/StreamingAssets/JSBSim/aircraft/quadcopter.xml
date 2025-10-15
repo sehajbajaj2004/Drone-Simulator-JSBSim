@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<fdm_config name="quadcopter" version="2.0" release="BETA">
+    <fileheader>
+        <author>Your Name</author>
+        <filecreationdate>2025-01-01</filecreationdate>
+        <description>Simple quadcopter drone</description>
+    </fileheader>
+
+    <metrics>
+        <wingarea unit="FT2">1.0</wingarea>
+        <wingspan unit="FT">1.64</wingspan>
+        <chord unit="FT">0.61</chord>
+        <htailarea unit="FT2">0.2</htailarea>
+        <htailarm unit="FT">1.0</htailarm>
+        <vtailarea unit="FT2">0.2</vtailarea>
+        <vtailarm unit="FT">1.0</vtailarm>
+        <location name="AERORP" unit="IN">
+            <x>0</x>
+            <y>0</y>
+            <z>0</z>
+        </location>
+        <location name="EYEPOINT" unit="IN">
+            <x>0</x>
+            <y>0</y>
+            <z>0</z>
+        </location>
+        <location name="VRP" unit="IN">
+            <x>0</x>
+            <y>0</y>
+            <z>0</z>
+        </location>
+    </metrics>
+
+    <mass_balance>
+        <ixx unit="SLUG*FT2">0.13</ixx>
+        <iyy unit="SLUG*FT2">0.13</iyy>
+        <izz unit="SLUG*FT2">0.22</izz>
+        <emptywt unit="LBS">3.3</emptywt>
+        <location name="CG" unit="IN">
+            <x>0</x>
+            <y>0</y>
+            <z>0</z>
+        </location>
+    </mass_balance>
+
+    <propulsion>
+        <engine file="electric_motor">
+            <location unit="IN">
+                <x>7.87</x>
+                <y>7.87</y>
+                <z>0</z>
+            </location>
+            <orient unit="DEG">
+                <roll>0</roll>
+                <pitch>0</pitch>
+                <yaw>0</yaw>
+            </orient>
+            <feed>0</feed>
+            <thruster file="prop">
+                <location unit="IN">
+                    <x>7.87</x>
+                    <y>7.87</y>
+                    <z>0</z>
+                </location>
+                <orient unit="DEG">
+                    <roll>0</roll>
+                    <pitch>0</pitch>
+                    <yaw>0</yaw>
+                </orient>
+            </thruster>
+        </engine>
+        <!-- Repeat for 3 more motors -->
+    </propulsion>
+
+    <flight_control name="Quadcopter FCS"/>
+    <aerodynamics/>
+    <external_reactions/>
+</fdm_config>
