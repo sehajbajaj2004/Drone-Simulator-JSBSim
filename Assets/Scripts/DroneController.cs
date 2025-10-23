@@ -78,17 +78,20 @@ public class DroneController : MonoBehaviour
         float x = (state.position.lon - originLatLonAlt.y) * degreesToMeters;
         float z = (state.position.lat - originLatLonAlt.x) * degreesToMeters;
         float y = (state.position.alt - originLatLonAlt.z) * metersPerFoot;
+
+        Debug.Log($"Converted Position - X: {x}, Y: {y}, Z: {z} | Drone Position - Lat: {state.position.lat}, Lon: {state.position.lon}, Alt: {state.position.alt}");
+        // Debug.Log($"Converted Position - X: {x}, Y: {y}, Z: {z}");
         
         transform.position = new Vector3(x, y, z);
         
         // Convert roll, pitch, yaw to Unity rotation
-        if (state.orientation != null)
-        {
-            float roll = state.orientation.roll * Mathf.Rad2Deg;
-            float pitch = state.orientation.pitch * Mathf.Rad2Deg;
-            float yaw = state.orientation.yaw * Mathf.Rad2Deg;
+        // if (state.orientation != null)
+        // {
+        //     float roll = state.orientation.roll * Mathf.Rad2Deg;
+        //     float pitch = state.orientation.pitch * Mathf.Rad2Deg;
+        //     float yaw = state.orientation.yaw * Mathf.Rad2Deg;
             
-            transform.rotation = Quaternion.Euler(-pitch, yaw, -roll);
-        }
+        //     transform.rotation = Quaternion.Euler(-pitch, yaw, -roll);
+        // }
     }
 }

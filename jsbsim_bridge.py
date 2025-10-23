@@ -10,7 +10,7 @@ class JSBSimBridge:
         self.fdm = None
         self.running = False
         
-    def initialize(self, aircraft='c172p'):  # Changed to use Cessna 172 (comes with JSBSim)
+    def initialize(self, aircraft='ah1s'):  # Changed to use Cessna 172 (comes with JSBSim)
         try:
             print("[DEBUG] Initializing JSBSim...")
             print(f"[DEBUG] JSBSim root directory: {jsbsim.get_default_root_dir()}")
