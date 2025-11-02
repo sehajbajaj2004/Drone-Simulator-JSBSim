@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
 using System.Collections.Generic;
-using System.Text; // For StringBuilder
+using System.Text;
 
 #region Serializable Classes
 [Serializable]
@@ -17,6 +17,7 @@ public class DroneState
     public Orientation orientation;
     public Velocity velocity;
     public AngularVelocity angular_velocity;
+    public Engine engine;
 }
 
 [Serializable]
@@ -25,6 +26,9 @@ public class Position
     public float lat;
     public float lon;
     public float alt;
+    public float unity_x;
+    public float unity_y;
+    public float unity_z;
 }
 
 [Serializable]
@@ -41,6 +45,7 @@ public class Velocity
     public float u;
     public float v;
     public float w;
+    public float airspeed;
 }
 
 [Serializable]
@@ -52,12 +57,19 @@ public class AngularVelocity
 }
 
 [Serializable]
+public class Engine
+{
+    public float rpm;
+    public float thrust;
+}
+
+[Serializable]
 public class ControlInputs
 {
     public float throttle;
-    public float aileron;
-    public float elevator;
-    public float rudder;
+    public float aileron;   // Roll control
+    public float elevator;  // Pitch control
+    public float rudder;    // Yaw control
 }
 #endregion
 
@@ -71,14 +83,26 @@ public class JSBSimManager : MonoBehaviour
     private string pythonPath = @"C:\Users\Sehaj\AppData\Local\Programs\Python\Python310\python.exe";
     public string scriptPath = "jsbsim_bridge.py";
 
-    [Header("Control Inputs")]
+    [Header("Flight Controls")]
+    [Range(0f, 1f)]
     public float throttle = 0f;
-    public float aileron = 0f;
-    public float elevator = 0f;
-    public float rudder = 0f;
+    
+    [Range(-1f, 1f)]
+    public float roll = 0f;      // Aileron control
+    
+    [Range(-1f, 1f)]
+    public float pitch = 0f;     // Elevator control
+    
+    [Range(-1f, 1f)]
+    public float yaw = 0f;       // Rudder control
+
+    [Header("Control Sensitivity")]
+    public float throttleRate = 1.0f;
+    public float controlRate = 2.0f;
 
     [Header("Debug")]
     public bool showDebugLogs = true;
+    public bool showDetailedState = false;
     public int messagesReceived = 0;
     public int messagesSent = 0;
 
@@ -89,8 +113,9 @@ public class JSBSimManager : MonoBehaviour
     private bool isConnected = false;
 
     private float debugTimer = 0f;
+    private float lastThrottle = 0f;
 
-    // ========= Log Collection =========
+    // Log Collection
     private StringBuilder logBuilder = new StringBuilder();
     private string logFilePath;
 
@@ -117,7 +142,6 @@ public class JSBSimManager : MonoBehaviour
     #region Logging Helpers
     private void SetupLogFile()
     {
-        // Create Logs directory if not exists
         string logsDir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Logs");
         if (!Directory.Exists(logsDir)) Directory.CreateDirectory(logsDir);
 
@@ -234,6 +258,18 @@ public class JSBSimManager : MonoBehaviour
                     UnityEngine.Debug.LogWarning("Check Python script / console output.");
                     Log("[WARNING] NOT RECEIVING DATA FROM PYTHON!");
                 }
+
+                // Show detailed state if enabled
+                if (showDetailedState && currentState != null)
+                {
+                    var pos = currentState.position;
+                    var orient = currentState.orientation;
+                    UnityEngine.Debug.Log($"Aircraft State - Unity Pos: ({pos.unity_x:F1}, {pos.unity_y:F1}, {pos.unity_z:F1})");
+                    UnityEngine.Debug.Log($"Orientation - Roll: {orient.roll * Mathf.Rad2Deg:F1}°, Pitch: {orient.pitch * Mathf.Rad2Deg:F1}°, Yaw: {orient.yaw * Mathf.Rad2Deg:F1}°");
+                    if (currentState.velocity != null)
+                        UnityEngine.Debug.Log($"Airspeed: {currentState.velocity.airspeed:F1} kts");
+                }
+
                 debugTimer = 0f;
             }
         }
@@ -246,9 +282,9 @@ public class JSBSimManager : MonoBehaviour
             ControlInputs controls = new ControlInputs
             {
                 throttle = throttle,
-                aileron = aileron,
-                elevator = elevator,
-                rudder = rudder
+                aileron = roll,      // Roll control maps to aileron
+                elevator = pitch,    // Pitch control maps to elevator
+                rudder = yaw        // Yaw control maps to rudder
             };
 
             string json = JsonConvert.SerializeObject(controls);
@@ -256,6 +292,13 @@ public class JSBSimManager : MonoBehaviour
 
             sendClient.Send(data, data.Length, "localhost", sendPort);
             messagesSent++;
+
+            // Log throttle changes
+            if (Mathf.Abs(throttle - lastThrottle) > 0.01f)
+            {
+                Log($"Throttle changed: {lastThrottle:F2} -> {throttle:F2}");
+                lastThrottle = throttle;
+            }
         }
         catch (Exception e)
         {
@@ -299,6 +342,31 @@ public class JSBSimManager : MonoBehaviour
         return currentState;
     }
 
+    public Vector3 GetUnityPosition()
+    {
+        if (currentState?.position != null)
+        {
+            return new Vector3(currentState.position.unity_x, 
+                             currentState.position.unity_y, 
+                             currentState.position.unity_z);
+        }
+        return Vector3.zero;
+    }
+
+    public Quaternion GetUnityRotation()
+    {
+        if (currentState?.orientation != null)
+        {
+            float roll = currentState.orientation.roll * Mathf.Rad2Deg;
+            float pitch = currentState.orientation.pitch * Mathf.Rad2Deg;
+            float yaw = currentState.orientation.yaw * Mathf.Rad2Deg;
+            
+            // Convert from aviation coordinates to Unity coordinates
+            return Quaternion.Euler(-pitch, yaw, -roll);
+        }
+        return Quaternion.identity;
+    }
+
     void OnApplicationQuit()
     {
         Log("=== Application Quit Triggered ===");
@@ -323,12 +391,29 @@ public class JSBSimManager : MonoBehaviour
     {
         if (!showDebugLogs) return;
 
-        GUILayout.BeginArea(new Rect(Screen.width - 310, 10, 300, 150));
+        GUILayout.BeginArea(new Rect(Screen.width - 350, 10, 340, 200));
         GUILayout.Label("=== JSBSim Manager ===");
         GUILayout.Label($"Python Running: {(pythonProcess != null && !pythonProcess.HasExited ? "Yes" : "No")}");
         GUILayout.Label($"Network: {(isConnected ? "Connected" : "Disconnected")}");
         GUILayout.Label($"Sent: {messagesSent} | Received: {messagesReceived}");
         GUILayout.Label($"Data Status: {(currentState != null ? "✓ OK" : "✗ None")}");
+        
+        GUILayout.Space(10);
+        GUILayout.Label("=== Flight Controls ===");
+        GUILayout.Label($"Throttle: {throttle:F2}");
+        GUILayout.Label($"Roll: {roll:F2} | Pitch: {pitch:F2} | Yaw: {yaw:F2}");
+        
+        if (currentState?.position != null)
+        {
+            var pos = currentState.position;
+            GUILayout.Label($"Unity Pos: ({pos.unity_x:F1}, {pos.unity_y:F1}, {pos.unity_z:F1})");
+        }
+        
+        if (currentState?.velocity != null)
+        {
+            GUILayout.Label($"Airspeed: {currentState.velocity.airspeed:F1} kts");
+        }
+        
         GUILayout.EndArea();
     }
 }
