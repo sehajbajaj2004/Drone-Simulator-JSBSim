@@ -36,7 +36,7 @@ public class JSBSimManager : MonoBehaviour
     public int receivePort = 5556;
 
     [Header("Python")]
-    public string pythonPath = "";                 // leave blank to use PATH
+    public string pythonPath = "";                 // leave blank to use PATH / venv
     public string scriptPath = "jsbsim_bridge.py"; // place at project root (sibling of Assets)
 
     [Header("Controls")]
@@ -60,27 +60,35 @@ public class JSBSimManager : MonoBehaviour
 
     private float debugTimer = 0f;
     private float lastThrottle = 0f;
+    private float logFlushTimer = 0f;
 
-    private System.Text.StringBuilder logBuilder = new System.Text.StringBuilder();
+    // ---- file logging restored ----
+    private StringBuilder logBuilder = new StringBuilder();
     private string logFilePath;
 
     void Start()
     {
         Application.runInBackground = true;
+
         SetupLogFile();
+        Log("=== JSBSim Manager Session Started ===");
+        Log($"Timestamp: {DateTime.Now}");
 
         string projectRoot = Directory.GetParent(Application.dataPath).FullName;
         string fullScriptPath = Path.Combine(projectRoot, scriptPath);
         if (!File.Exists(fullScriptPath)) {
+            Log($"[ERROR] Python script not found at: {fullScriptPath}");
             Debug.LogError($"Python script not found at: {fullScriptPath}");
             return;
         }
 
+        Log($"Found Python script at: {fullScriptPath}");
         StartPythonBridge(fullScriptPath);
         InitializeNetwork();
     }
 
-    void SetupLogFile()
+    // -------- Logging (restored) --------
+    private void SetupLogFile()
     {
         string logsDir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Logs");
         if (!Directory.Exists(logsDir)) Directory.CreateDirectory(logsDir);
@@ -88,10 +96,29 @@ public class JSBSimManager : MonoBehaviour
         logFilePath = Path.Combine(logsDir, $"JSBSimLog_{timestamp}.txt");
     }
 
+    private void Log(string message)
+    {
+        string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        logBuilder.AppendLine(line);
+        if (showDebugLogs) Debug.Log(message);
+    }
+
+    private void WriteLogsToFile()
+    {
+        try {
+            File.WriteAllText(logFilePath, logBuilder.ToString());
+            Debug.Log($"Logs written to: {logFilePath}");
+        } catch (Exception e) {
+            Debug.LogError($"Failed to write log file: {e.Message}");
+        }
+    }
+
+    // -------- Python Bridge --------
     void StartPythonBridge(string fullPath)
     {
         try {
             string exe = (string.IsNullOrWhiteSpace(pythonPath) || !File.Exists(pythonPath)) ? "python" : pythonPath;
+
             pythonProcess = new Proc.Process();
             pythonProcess.StartInfo.FileName = exe;
             pythonProcess.StartInfo.Arguments = $"\"{fullPath}\"";
@@ -100,17 +127,33 @@ public class JSBSimManager : MonoBehaviour
             pythonProcess.StartInfo.RedirectStandardError = true;
             pythonProcess.StartInfo.CreateNoWindow = true;
             pythonProcess.StartInfo.WorkingDirectory = Directory.GetParent(Application.dataPath).FullName;
-            pythonProcess.OutputDataReceived += (s, a) => { if (!string.IsNullOrEmpty(a.Data)) Debug.Log($"[Python] {a.Data}"); };
-            pythonProcess.ErrorDataReceived  += (s, a) => { if (!string.IsNullOrEmpty(a.Data)) Debug.LogError($"[Python Error] {a.Data}"); };
+
+            pythonProcess.OutputDataReceived += (s, a) =>
+            {
+                if (!string.IsNullOrEmpty(a.Data))
+                {
+                    Log($"[Python] {a.Data}");
+                }
+            };
+            pythonProcess.ErrorDataReceived += (s, a) =>
+            {
+                if (!string.IsNullOrEmpty(a.Data))
+                {
+                    Log($"[Python Error] {a.Data}");
+                }
+            };
+
             pythonProcess.Start();
             pythonProcess.BeginOutputReadLine();
             pythonProcess.BeginErrorReadLine();
-            Debug.Log("Python bridge started");
+
+            Log("Python bridge started");
         } catch (Exception e) {
-            Debug.LogError($"Failed to start Python bridge: {e.Message}");
+            Log($"[ERROR] Failed to start Python bridge: {e.Message}");
         }
     }
 
+    // -------- Networking --------
     void InitializeNetwork()
     {
         try {
@@ -118,9 +161,10 @@ public class JSBSimManager : MonoBehaviour
             receiveClient = new UdpClient(receivePort, AddressFamily.InterNetwork);
             receiveClient.Client.ReceiveTimeout = 20;
             isConnected = true;
-            Debug.Log($"Network: send {host}:{sendPort}, recv {receivePort}");
+
+            Log($"Network initialized - Sending to {host}:{sendPort}, Receiving on {receivePort}");
         } catch (Exception e) {
-            Debug.LogError($"Network init failed: {e.Message}");
+            Log($"[ERROR] Network init failed: {e.Message}");
         }
     }
 
@@ -128,20 +172,31 @@ public class JSBSimManager : MonoBehaviour
     {
         if (!isConnected) return;
 
+        // J → start sequence (one-shot)
         if (Input.GetKeyDown(KeyCode.J)) {
-            engineStartRequested = true;   // one-shot in SendControls()
-            Debug.Log("Engine start requested (J).");
+            engineStartRequested = true;
+            Log("Engine start requested (J).");
         }
 
         SendControls();
         ReceiveState();
 
-        if (showDebugLogs) {
-            debugTimer += Time.deltaTime;
-            if (debugTimer >= 3f) {
-                Debug.Log($"NET: sent={messagesSent}, recv={messagesReceived}");
-                debugTimer = 0f;
+        // Console & file status every 3s
+        debugTimer += Time.deltaTime;
+        logFlushTimer += Time.deltaTime;
+
+        if (debugTimer >= 3f) {
+            Log($"NET: sent={messagesSent}, recv={messagesReceived}");
+            if (showDetailedState && currentState?.meta != null) {
+                Log($"Model={currentState.meta.model}, rotorcraft={currentState.meta.rotorcraft}");
             }
+            debugTimer = 0f;
+        }
+
+        // Periodic flush to disk (optional; keeps log alive if Unity crashes)
+        if (logFlushTimer >= 10f) {
+            WriteLogsToFile();
+            logFlushTimer = 0f;
         }
     }
 
@@ -157,15 +212,21 @@ public class JSBSimManager : MonoBehaviour
             };
 
             string json = JsonConvert.SerializeObject(controls);
-            byte[] data = System.Text.Encoding.UTF8.GetBytes(json);
+            byte[] data = Encoding.UTF8.GetBytes(json);
             sendClient.Send(data, data.Length, host, sendPort);
             messagesSent++;
+
+            // clear the one-shot flag only after a successful send
             engineStartRequested = false;
 
-            if (Mathf.Abs(throttle - lastThrottle) > 0.01f) lastThrottle = throttle;
+            // lightweight change log
+            if (Mathf.Abs(throttle - lastThrottle) > 0.05f) {
+                Log($"Throttle -> {throttle:F2}");
+                lastThrottle = throttle;
+            }
         }
         catch (Exception e) {
-            Debug.LogError($"Send failed: {e.Message}");
+            Log($"[ERROR] Send failed: {e.Message}");
         }
     }
 
@@ -173,21 +234,19 @@ public class JSBSimManager : MonoBehaviour
     {
         try {
             IPEndPoint ep = new IPEndPoint(IPAddress.Any, receivePort);
-            byte[] data = receiveClient.Receive(ref ep);
-            string json = System.Text.Encoding.UTF8.GetString(data);
+            byte[] data = receiveClient.Receive(ref ep); // throws on timeout
+            string json = Encoding.UTF8.GetString(data);
             currentState = JsonConvert.DeserializeObject<DroneState>(json);
             messagesReceived++;
 
-            if (showDetailedState && currentState != null && (messagesReceived % 50 == 0)) {
-                var m = currentState.meta;
-                Debug.Log($"Model={m?.model}, rotorcraft={m?.rotorcraft}");
-            }
+            if (messagesReceived == 1)
+                Log("✓ First state received from JSBSim.");
         }
         catch (SocketException) {
             // timeout; ignore
         }
         catch (Exception e) {
-            Debug.LogError($"Receive failed: {e.Message}");
+            Log($"[ERROR] Receive failed: {e.Message}");
         }
     }
 
@@ -211,8 +270,18 @@ public class JSBSimManager : MonoBehaviour
 
     void OnApplicationQuit()
     {
-        try { if (pythonProcess != null && !pythonProcess.HasExited) pythonProcess.Kill(); } catch { }
+        Log("=== Application Quit ===");
+        try {
+            if (pythonProcess != null && !pythonProcess.HasExited) {
+                pythonProcess.Kill();
+                Log("Python process terminated");
+            }
+        } catch { }
+
         try { sendClient?.Close(); } catch { }
         try { receiveClient?.Close(); } catch { }
+
+        Log($"Final counts - Sent: {messagesSent}, Received: {messagesReceived}");
+        WriteLogsToFile();  // <-- save to file on exit
     }
 }

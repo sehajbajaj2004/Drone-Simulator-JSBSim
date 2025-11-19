@@ -329,7 +329,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   useKeyboardInput: 1
-  useMouseForView: 1
   throttleSensitivity: 1
   pitchSensitivity: 2
   rollSensitivity: 2
@@ -358,7 +357,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 0
+  m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 1
   m_Constraints: 0
@@ -413,15 +412,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8aa0fc04e51931f409c47c5b8335fb24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  host: 127.0.0.1
   sendPort: 5555
   receivePort: 5556
+  pythonPath: C:\Users\Sehaj\AppData\Local\Programs\Python\Python310\python.exe
   scriptPath: jsbsim_bridge.py
   throttle: 0
   roll: 0
   pitch: 0
   yaw: 0
-  throttleRate: 1
-  controlRate: 2
   showDebugLogs: 1
   showDetailedState: 0
   messagesReceived: 0
@@ -661,7 +660,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &1390498784
 MeshCollider:
   m_ObjectHideFlags: 0
