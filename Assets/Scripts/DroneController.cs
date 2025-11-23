@@ -61,29 +61,28 @@ public class DroneController : MonoBehaviour
         else if (Input.GetKey(KeyCode.F) || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             targetThrottle -= throttleSensitivity * dt;
 
-        // Pitch (elevator)
+        // Pitch (should accumulate like throttle)
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
-            targetPitch = pitchSensitivity;
+            targetPitch += pitchSensitivity * dt;
         else if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
-            targetPitch = -pitchSensitivity;
+            targetPitch -= pitchSensitivity * dt;
         else
-            targetPitch = 0f;
+            targetPitch = Mathf.Lerp(targetPitch, 0f, 5f * dt); // Return to neutral
 
-        // Roll (aileron)
+        // Same for Roll
         if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
-            targetRoll = -rollSensitivity;
+            targetRoll -= rollSensitivity * dt;
         else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
-            targetRoll = rollSensitivity;
+            targetRoll += rollSensitivity * dt;
         else
-            targetRoll = 0f;
-
-        // Yaw (rudder)
+            targetRoll = Mathf.Lerp(targetRoll, 0f, 5f * dt);
+        // Same for Yaw
         if (Input.GetKey(KeyCode.Q))
-            targetYaw = -yawSensitivity;
+            targetYaw -= yawSensitivity * dt;
         else if (Input.GetKey(KeyCode.E))
-            targetYaw = yawSensitivity;
+            targetYaw += yawSensitivity * dt;
         else
-            targetYaw = 0f;
+            targetYaw = Mathf.Lerp(targetYaw, 0f, 5f * dt);
 
         targetThrottle = Mathf.Clamp01(targetThrottle);
         targetRoll = Mathf.Clamp(targetRoll, -1f, 1f);

@@ -262,10 +262,16 @@ public class JSBSimManager : MonoBehaviour
     {
         var o = currentState?.orientation;
         if (o == null) return Quaternion.identity;
+        
+        // JSBSim: NED (North-East-Down), roll right +, pitch up +, yaw right +
+        // Unity: Left-handed Y-up, X right, Y up, Z forward
+        
         float rollDeg = o.roll * Mathf.Rad2Deg;
         float pitchDeg = o.pitch * Mathf.Rad2Deg;
         float yawDeg = o.yaw * Mathf.Rad2Deg;
-        return Quaternion.Euler(-pitchDeg, yawDeg, -rollDeg);
+        
+        // Try this conversion:
+        return Quaternion.Euler(pitchDeg, yawDeg, -rollDeg);
     }
 
     void OnApplicationQuit()

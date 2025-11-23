@@ -138,6 +138,7 @@ class JSBSimBridge:
                 except Exception:
                     pass
 
+
         # Engine OFF and controls neutral
         self._engine_off()
         self._neutral_controls()
@@ -147,6 +148,18 @@ class JSBSimBridge:
 
         # Park brake ON until J (harmless on skids; holds on wheels)
         self._apply_all_brakes(1.0)
+        for p in [
+            "fcs/pitch-trim-cmd-norm",
+            "fcs/roll-trim-cmd-norm",
+            "fcs/yaw-trim-cmd-norm",
+            "fcs/elevator-trim-cmd-norm",
+            "fcs/aileron-trim-cmd-norm",
+            "fcs/rudder-trim-cmd-norm",
+        ]:
+            try:
+                self.fdm[p] = 0.0
+            except Exception:
+                pass
 
     def _ensure_fuel_after_ic(self):
         # If contents still zero after run_ic, try again
@@ -200,8 +213,8 @@ class JSBSimBridge:
             except Exception: pass
 
     def _force_afcs_manual(self, enable: bool):
-        """enable=False turns AFCS off; True would turn it on."""
         val = 1.0 if enable else 0.0
+        # Add these additional properties:
         for p in [
             "ap/afcs/roll-channel-active-norm",
             "ap/afcs/pitch-channel-active-norm",
@@ -209,15 +222,17 @@ class JSBSimBridge:
             "ap/afcs/altitude-channel-active-norm",
             "ap/afcs/sas-active-norm",
             "ap/afcs/attitude-hold-active-norm",
+            "ap/afcs/heading-hold-active-norm",      # ADD
+            "ap/active",                              # ADD
+            "ap/attitude_hold",                       # ADD
+            "fcs/yaw-damper-enable",                  # ADD
+            "fcs/pitch-damper-enable",                # ADD
+            "fcs/roll-damper-enable",                 # ADD
         ]:
-            try: self.fdm[p] = val
-            except Exception: pass
-        try: self.fdm["ap/afcs/heading-hold-enable"] = 1.0 if enable else 0.0
-        except Exception: pass
-        for p in ["ap/afcs/phi-trim-rad", "ap/afcs/theta-trim-rad",
-                  "ap/afcs/psi-trim-rad", "ap/afcs/altitude-trim-ft"]:
-            try: self.fdm[p] = 0.0
-            except Exception: pass
+            try: 
+                self.fdm[p] = val
+            except Exception: 
+                pass
 
     def _configure_engine_for_start(self):
         # Fuel & ignition
@@ -339,16 +354,36 @@ class JSBSimBridge:
         yaw      = max(-1.0, min(1.0, float(yaw)))
 
         if self.is_rotorcraft:
-            # Try primary names; if not present, try fallbacks used by some heli models.
-            self._set_if_exists(["fcs/collective-cmd-norm", "fcs/rotor-collective-cmd-norm"], throttle)
-            self._set_if_exists(["fcs/roll-cmd-norm"], roll)               # lateral cyclic
-            self._set_if_exists(["fcs/pitch-cmd-norm"], pitch)             # longitudinal cyclic
-            self._set_if_exists(["fcs/yaw-cmd-norm", "fcs/anti-torque-cmd-norm"], yaw)
-        else:
-            self._set_if_exists(["fcs/throttle-cmd-norm[0]"], throttle)
-            self._set_if_exists(["fcs/aileron-cmd-norm"], roll)
-            self._set_if_exists(["fcs/elevator-cmd-norm"], pitch)
-            self._set_if_exists(["fcs/rudder-cmd-norm"], yaw)
+            # Collective
+            self._set_if_exists([
+                "fcs/collective-cmd-norm",
+                "fcs/rotor-collective-cmd-norm",
+                "fcs/throttle-cmd-norm[0]"
+            ], throttle)
+            
+            # Lateral cyclic (roll)
+            self._set_if_exists([
+                "fcs/roll-cmd-norm",
+                "fcs/aileron-cmd-norm",
+                "fcs/lateral-cyclic-cmd-norm",
+                "fcs/cyclic-lateral-cmd-norm"
+            ], roll)
+            
+            # Longitudinal cyclic (pitch)
+            self._set_if_exists([
+                "fcs/pitch-cmd-norm",
+                "fcs/elevator-cmd-norm",
+                "fcs/longitudinal-cyclic-cmd-norm",
+                "fcs/cyclic-longitudinal-cmd-norm"
+            ], pitch)
+            
+            # Anti-torque pedal (yaw)
+            self._set_if_exists([
+                "fcs/yaw-cmd-norm",
+                "fcs/rudder-cmd-norm",
+                "fcs/anti-torque-cmd-norm",
+                "fcs/pedal-cmd-norm"
+            ], yaw)
 
     def run_server(self):
         try:
